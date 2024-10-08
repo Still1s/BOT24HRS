@@ -1,76 +1,124 @@
 const express = require("express");
 const http = require("http");
-const mineflayer = require("mineflayer");
-const pvp = require("mineflayer-pvp").plugin;
-const { pathfinder, Movements, goals } = require("mineflayer-pathfinder");
-const armorManager = require("mineflayer-armor-manager");
-const AutoAuth = require("mineflayer-auto-auth");
+const mineflayer = require('mineflayer')
+const pvp = require('mineflayer-pvp').plugin
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
+const armorManager = require('mineflayer-armor-manager')
+const mc = require('minecraft-protocol');
+const AutoAuth = require('mineflayer-auto-auth');
 const app = express();
+
 
 app.use(express.json());
 
 app.get("/", (_, res) => res.sendFile(__dirname + "/index.html"));
-app.listen(process.env.PORT || 10000); // Defina uma porta padrão se não estiver no ambiente de produção
+app.listen(process.env.PORT);
 
 setInterval(() => {
   http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
 }, 224000);
 
+
+// U CAN ONLY EDIT THIS SECTION!!
 function createBot() {
   const bot = mineflayer.createBot({
-    host: "Craft24hrs.aternos.me",
+    host: 'Craft24hrs.aternos.me',
     version: false,
-    username: "AFK24HRS",
-    port: 41262,
+    username: 'AFK24HRS',
+    port:41262,
     plugins: [AutoAuth],
-    AutoAuth: "bot1122033"
-  });
+    AutoAuth: 'bot1122033'
+  })
+  /// DONT TOUCH ANYTHING MORE!
+  bot.loadPlugin(pvp)
+  bot.loadPlugin(armorManager)
+  bot.loadPlugin(pathfinder)
 
-  bot.loadPlugin(pvp);
-  bot.loadPlugin(armorManager);
-  bot.loadPlugin(pathfinder);
 
-  // Gerenciamento de erros e reconexão
-  bot.on("kicked", (reason) => {
-    console.log(`Kicked for: ${reason}`);
-    setTimeout(createBot, 5000); // Aguardar 5 segundos antes de reconectar
-  });
-
-  bot.on("error", (err) => {
-    console.error(`Error: ${err}`);
-    setTimeout(createBot, 5000); // Aguardar 5 segundos antes de reconectar
-  });
-
-  bot.on("end", () => {
-    console.log("Bot disconnected, attempting to reconnect...");
-    setTimeout(createBot, 5000); // Aguardar 5 segundos antes de reconectar
-  });
-
-  // O resto do seu código de bot...
-  bot.on("playerCollect", (collector, itemDrop) => {
-    if (collector !== bot.entity) return;
+  bot.on('playerCollect', (collector, itemDrop) => {
+    if (collector !== bot.entity) return
 
     setTimeout(() => {
-      const sword = bot.inventory.items().find(item => item.name.includes("sword"));
-      if (sword) bot.equip(sword, "hand");
-    }, 150);
-  });
+      const sword = bot.inventory.items().find(item => item.name.includes('sword'))
+      if (sword) bot.equip(sword, 'hand')
+    }, 150)
+  })
 
-  bot.on("chat", (username, message) => {
-    if (message === "guard") {
-      const player = bot.players[username];
-      if (player) {
-        guardArea(player.entity.position);
-        bot.chat("I will!");
+  bot.on('playerCollect', (collector, itemDrop) => {
+    if (collector !== bot.entity) return
+
+    setTimeout(() => {
+      const shield = bot.inventory.items().find(item => item.name.includes('shield'))
+      if (shield) bot.equip(shield, 'off-hand')
+    }, 250)
+  })
+
+  let guardPos = null
+
+  function guardArea(pos) {
+    guardPos = pos.clone()
+
+    if (!bot.pvp.target) {
+      moveToGuardPos()
+    }
+  }
+
+  function stopGuarding() {
+    guardPos = null
+    bot.pvp.start()
+    bot.pathfinder.setGoal(null)
+  }
+
+  function moveToGuardPos() {
+    const mcData = require('minecraft-data')(bot.version)
+    bot.pathfinder.setMovements(new Movements(bot, mcData))
+    bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z))
+  }
+
+  bot.on('stoppedAttacking', () => {
+    if (guardPos) {
+      moveToGuardPos()
+    }
+  })
+
+  bot.on('physicTick', () => {
+    if (bot.pvp.target) return
+    if (bot.pathfinder.isMoving()) return
+
+    const entity = bot.nearestEntity()
+    if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0))
+  })
+  bot.on('physicTick', () => {
+    if (!guardPos) return
+    const filter = e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) < 16 &&
+      e.mobType !== 'Armor Stand'
+    const entity = bot.nearestEntity(filter)
+    if (entity) {
+      bot.pvp.attack(entity)
+    }
+  })
+  bot.on('chat', (username, message) => {
+    if (message === 'guard') {
+      const player = bot.players[username]
+
+      if (!player) {
+        bot.chat('I will!')
+        guardArea(player.entity.position)
       }
-    }
-    if (message === "love you") {
-      bot.chat("I Love you Too Meri jaan :)");
-      stopGuarding();
-    }
-  });
 
-  // Implemente os outros eventos e funcionalidades aqui...
+    }
+    if (message === 'love you') {
+      bot.chat('I Love you Too Meri jaan :)')
+      stopGuarding()
+    }
+  })
+
+  bot.on('kicked', console.log)
+  bot.on('error', console.log)
+  bot.on('end', createBot)
 }
 
-createBot();
+createBot()
+
+//// Rembember to sucribe to my channels!
+///Sagar Gaming 2X
